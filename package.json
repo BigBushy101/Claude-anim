@@ -1,0 +1,19 @@
+{
+  "name": "the-walls",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A 3D animated history of AI as robots breaking through walls",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "capture": "node tools/capture.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "5.4.11"
+  }
+}

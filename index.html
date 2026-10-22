@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Walls — a history of AI</title>
+  <style>
+    :root { --ar: 2.39; }
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: #e9edf6; font-family: system-ui, "Helvetica Neue", Arial, sans-serif; }
+    #stage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(100vw, calc(100vh * var(--ar))); aspect-ratio: var(--ar); background: #000; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud { position: absolute; left: 3.2%; bottom: 5%; pointer-events: none; font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 1.5s; }
+    #hud.on { opacity: 1; }
+    #year { font: 700 clamp(18px, 3.2vw, 46px)/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .06em; color: #ffe2c2; text-shadow: 0 0 18px rgba(255,150,80,.55); }
+    #yearlabel { font: 600 clamp(8px, .8vw, 11px)/1 ui-monospace, Menlo, monospace; letter-spacing: .3em; color: rgba(255,226,194,.55); margin-bottom: .6em; }
+    #title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; opacity: 0; }
+    #title h1 { margin: 0; font: 800 clamp(28px, 6vw, 92px)/1 system-ui, Arial, sans-serif; letter-spacing: .28em; padding-left: .28em; text-shadow: 0 0 40px rgba(255,150,90,.5); }
+    #title p { margin: 1.1em 0 0; font: 400 clamp(10px, 1.1vw, 16px)/1.5 ui-monospace, Menlo, monospace; letter-spacing: .18em; color: rgba(233,237,246,.7); text-transform: uppercase; }
+    #start { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2em; background: #000; text-align: center; transition: opacity .8s; }
+    #start h1 { margin: 0; font: 800 clamp(30px, 6.4vw, 100px)/1 system-ui, Arial, sans-serif; letter-spacing: .28em; padding-left: .28em; }
+    #start p { margin: 0; max-width: 34em; font: 400 clamp(11px, 1.15vw, 16px)/1.6 ui-monospace, Menlo, monospace; color: rgba(233,237,246,.65); letter-spacing: .06em; }
+    button { cursor: pointer; font: 600 clamp(11px, 1.1vw, 15px) ui-monospace, Menlo, monospace; letter-spacing: .24em; text-transform: uppercase; color: #fff; background: transparent; border: 1px solid rgba(255,255,255,.5); padding: 1em 2.2em; transition: all .2s; }
+    button:hover { background: #fff; color: #000; }
+    #start .alt { border: none; padding: .4em; opacity: .5; font-size: clamp(9px, .9vw, 12px); }
+    #start .alt:hover { background: none; color: #fff; opacity: 1; }
+    #end { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 2s; z-index: 4; }
+    #end.on { opacity: 1; pointer-events: auto; }
+    .hidden { opacity: 0; pointer-events: none; }
+    body.capture * { transition: none !important; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="title"><h1>THE WALLS</h1><p>A short history of AI, and the limits it was supposed to hit</p></div>
+    <div id="hud"><div id="yearlabel">YEAR</div><div id="year">2018</div></div>
+    <div id="end"><button id="replay">Replay</button></div>
+    <div id="start">
+      <h1>THE WALLS</h1>
+      <p>A 3D history of AI told as robots walking into walls.<br />Best with sound on. Space pauses.</p>
+      <button id="begin">Begin</button>
+      <button id="beginMuted" class="alt">play without sound</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
