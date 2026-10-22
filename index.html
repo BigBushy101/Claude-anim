@@ -27,6 +27,10 @@
     #end.on { opacity: 1; pointer-events: auto; }
     .hidden { opacity: 0; pointer-events: none; }
     body.capture * { transition: none !important; }
+    #sound { position: absolute; right: 3%; top: 6%; z-index: 6; display: none; padding: .7em 1.2em; background: rgba(0,0,0,.6); }
+    #sound.on { display: block; }
+    #hint { display: none; }
+    @media (max-aspect-ratio: 1/1) { :root { --ar: 1.6; } #hint { display: block; } }
   </style>
 </head>
 <body>
@@ -34,11 +38,13 @@
     <div id="title"><h1>THE WALLS</h1><p>A short history of AI, and the limits it was supposed to hit</p></div>
     <div id="hud"><div id="yearlabel">YEAR</div><div id="year">2018</div></div>
     <div id="end"><button id="replay">Replay</button></div>
+    <button id="sound">Tap for sound</button>
     <div id="start">
       <h1>THE WALLS</h1>
       <p>A 3D history of AI told as robots walking into walls.<br />Best with sound on. Space pauses.</p>
       <button id="begin">Begin</button>
       <button id="beginMuted" class="alt">play without sound</button>
+      <p id="hint">Best viewed in landscape.</p>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>

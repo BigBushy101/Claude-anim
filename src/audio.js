@@ -347,6 +347,19 @@ export function buildScore(ctx, dest, t0 = 0) {
 }
 
 // --- playback wrapper --------------------------------------------------------------
+// A looping silent <audio> element flips iOS into its "playback" audio session,
+// so Web Audio is heard even with the ringer switch on silent.
+function silentWavUri() {
+  const n = 8000, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) b[o + i] = s.charCodeAt(i); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+  b.fill(128, 44);
+  let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return 'data:audio/wav;base64,' + btoa(s);
+}
+
 export function createAudio() {
   let ctx = null, start = 0;
   return {
@@ -355,9 +368,11 @@ export function createAudio() {
     start() {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return false;
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
+      try { const a = new Audio(silentWavUri()); a.loop = true; a.play().catch(() => {}); } catch (e) { /* optional */ }
       ctx = new AC();
       if (ctx.state === 'suspended') ctx.resume();
-      start = ctx.currentTime + 1.2; // headroom: scheduling the whole score takes a moment
+      start = ctx.currentTime + 1.6; // headroom: scheduling the whole score takes a moment (longer on phones)
       buildScore(ctx, ctx.destination, start);
       return true;
     },

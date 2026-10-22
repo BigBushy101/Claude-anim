@@ -13,14 +13,17 @@ import { createAudio, renderWav, buildScore } from './audio.js';
 
 const params = new URLSearchParams(location.search);
 const SEEK = params.has('t') ? parseFloat(params.get('t')) : null;
-const LOWQ = params.get('q') === 'low';
+const IS_MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
+// quality tiers: 0 full, 1 no shadows, 2 + no bloom at 1x, 3 + reduced resolution
+let tier = params.get('q') === 'low' ? 2 : params.get('q') === 'high' ? 0 : IS_MOBILE ? 1 : 0;
+const LOWQ = tier >= 2;
 if (params.get('ar')) {
   const [a, b] = params.get('ar').split(':').map(Number);
   if (a && b) document.documentElement.style.setProperty('--ar', String(a / b));
 }
 
 const stage = document.getElementById('stage');
-const renderer = new THREE.WebGLRenderer({ antialias: !LOWQ, powerPreference: 'high-performance', preserveDrawingBuffer: SEEK !== null });
+const renderer = new THREE.WebGLRenderer({ antialias: tier < 2, powerPreference: 'high-performance', preserveDrawingBuffer: SEEK !== null });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -204,9 +207,14 @@ function renderAt(t) {
   titleEl.style.opacity = ta;
 }
 
+function applyTier() {
+  world.sun.castShadow = tier < 1;
+  post.bloom.enabled = tier < 2;
+  resize();
+}
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
-  const dpr = LOWQ ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = [Math.min(window.devicePixelRatio || 1, 2), Math.min(window.devicePixelRatio || 1, 1.5), 1, 0.7][tier];
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
   post.setSize(w, h);
@@ -214,7 +222,7 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
-resize();
+applyTier();
 
 // ---- playback ----------------------------------------------------------------------------------------
 const audio = createAudio();
@@ -225,9 +233,24 @@ const nowT = () => {
   return (performance.now() - wallStart) / 1000;
 };
 
+// step quality down if the device can't hold ~30 fps
+let lastFrame = 0, slow = 0, frames = 0;
+function watchPerf() {
+  const now = performance.now();
+  if (lastFrame && !document.hidden) {
+    slow += now - lastFrame > 36 ? 1 : 0;
+    if (++frames >= 90) {
+      if (slow > 45 && tier < 3 && SEEK === null) { tier++; applyTier(); }
+      slow = 0; frames = 0;
+    }
+  }
+  lastFrame = now;
+}
+
 function loop() {
   requestAnimationFrame(loop);
-  if (!playing || paused) return;
+  if (!playing || paused) { lastFrame = 0; return; }
+  watchPerf();
   const t = Math.max(0, nowT());
   renderAt(Math.min(t, DURATION));
   if (t >= DURATION && !ended) { ended = true; document.getElementById('end').classList.add('on'); }
@@ -238,9 +261,15 @@ function begin(withSound) {
   document.getElementById('end').classList.remove('on');
   ended = false;
   useAudio = withSound && audio.start();
-  wallStart = performance.now() + 1200;
+  wallStart = performance.now() + 1600;
   playing = true; paused = false;
+  // if the browser kept the audio context suspended, offer a tap to start it
+  setTimeout(() => {
+    if (useAudio && audio.ctx && audio.ctx.state !== 'running') soundBtn.classList.add('on');
+  }, 1800);
 }
+const soundBtn = document.getElementById('sound');
+soundBtn.onclick = () => { audio.ctx?.resume(); soundBtn.classList.remove('on'); };
 document.getElementById('begin').onclick = () => begin(true);
 document.getElementById('beginMuted').onclick = () => begin(false);
 document.getElementById('replay').onclick = () => { audio.stop(); begin(true); };
