@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SPEED, BOTS, WALLS, RSI, END_T, DURATION, T_ASSAULT, T_CRACK0, T_CRACK1, T_FARSIDE, FAR_THUMPS } from './timeline.js';
+import { toReal, toAuth, BOTS, WALLS, RSI, END_T, DURATION, T_ASSAULT, T_CRACK0, T_CRACK1, T_FARSIDE, FAR_THUMPS } from './timeline.js';
 import { markerX, botState, yearAt, wallFaceX, smoothstep, clamp, lerp, botById } from './sim.js';
 import { placedCards } from './cards.js';
 import { buildRobot, poseRobot } from './robot.js';
@@ -80,6 +80,13 @@ for (const w of walls) {
 for (const h of walls[5].hits) {
   const face = wallFaceX(RSI);
   addBurst('embers', { origin: [face - 0.05, h.y, h.z], t0: h.ti, seed: seed++, dir: [-1.1, 0.2, 0], spread: 0.8, scale: 0.9 });
+}
+
+// a model powers down: a shower of sparks and a puff from the head
+for (const b of BOTS) if (b.tRetire) {
+  const st = botState(b, b.tRetire);
+  addBurst('sparks', { origin: [st.x, 2.0, st.z], t0: b.tRetire - 0.6, seed: seed++, box: [0.3, 0.3, 0.3], dir: [0, 0.8, 0], spread: 1.2, scale: 0.9 });
+  addBurst('puff', { origin: [st.x, 1.6, st.z], t0: b.tRetire - 0.2, seed: seed++, box: [0.3, 0.4, 0.3], dir: [0, 0.7, 0], spread: 0.8, scale: 0.7 });
 }
 
 // dust shaken loose on the far side by the muffled blows
@@ -184,7 +191,7 @@ function renderAt(t) {
     const intro = smoothstep(0, 1, since) * (1 - smoothstep(7, 9, since));
     const roll = smoothstep(137, 139, t) * (1 - smoothstep(158, 160, t));
     const nameA = Math.max(intro, roll * 0.9);
-    r.plate.material.opacity = st.visible ? nameA : 0;
+    r.plate.material.opacity = st.visible ? nameA * (1 - st.off) : 0;
   });
   for (const w of walls) { w.group.visible = Math.abs(w.spec.x - mx) < 260; if (w.group.visible) w.update(t); }
   for (const b of bursts) b.update(t);
@@ -228,10 +235,10 @@ applyTier();
 const audio = createAudio();
 let playing = false, paused = false, wallStart = 0, pausedAt = 0, ended = false;
 let useAudio = false;
-// real seconds -> authored seconds (the film is sped up by SPEED)
+// real seconds -> story seconds (the film's speed varies, see toAuth)
 const nowT = () => {
-  if (useAudio) { const a = audio.time(); if (a != null) return a * SPEED; }
-  return ((performance.now() - wallStart) / 1000) * SPEED;
+  if (useAudio) { const a = audio.time(); if (a != null) return toAuth(a); }
+  return toAuth((performance.now() - wallStart) / 1000);
 };
 
 // step quality down if the device can't hold ~30 fps
@@ -289,7 +296,7 @@ window.__film = {
   cam() { return { p: camera.position.toArray().map((v) => +v.toFixed(2)), fov: camera.fov, marker: markerX(window.__t ?? 0) }; },
   wav: renderWav,
   buildMs() { const c = new OfflineAudioContext(2, 44100, 44100); const t0 = performance.now(); buildScore(c, c.destination, 0); return performance.now() - t0; },
-  END_T, DURATION, SPEED,
+  END_T, DURATION, toReal, toAuth,
 };
 
 if (SEEK !== null) {

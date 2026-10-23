@@ -1,18 +1,19 @@
 // All story data lives here: who joins when, where the walls stand, and when
 // each one breaks. Everything else in the film is a pure function of this + time.
 
-// Playback speed-up: every time below is in "authored" seconds; the film plays
-// SPEED times faster, so the authored 202 s runs in about 126 s.
-export const SPEED = 1.6;
+// Pacing. Everything below is authored in "story seconds"; the film plays them at
+// a varying speed: fights run near real speed with a slow-motion beat on each
+// break, and the walks between walls are fast-forwarded, faster each time, so the
+// rate of progress visibly accelerates.
 export const END_T = 202;      // hard cut to black
 export const DURATION = 207;   // includes the silent black tail
-
-// level: 0 = clunky pile of boxes, 1 = fully humanoid
+// level: 0 = clunky pile of boxes, 1 = fully humanoid.
+// tRetire: the model is superseded, stops where it stands and powers down.
 export const BOTS = [
-  { id: 'gpt1',     name: 'GPT-1',    level: 0.08, color: '#7be0c0', tJoin: -14 },
-  { id: 'gpt2',     name: 'GPT-2',    level: 0.22, color: '#6fd3b4', tJoin: 6 },
-  { id: 'gpt3',     name: 'GPT-3',    level: 0.40, color: '#5fe0b0', tJoin: 12 },
-  { id: 'gpt4',     name: 'GPT-4',    level: 0.60, color: '#4fffc0', tJoin: 33 },
+  { id: 'gpt1',     name: 'GPT-1',    level: 0.08, color: '#7be0c0', tJoin: -14, tRetire: 32 },
+  { id: 'gpt2',     name: 'GPT-2',    level: 0.22, color: '#6fd3b4', tJoin: 6, tRetire: 40 },
+  { id: 'gpt3',     name: 'GPT-3',    level: 0.40, color: '#5fe0b0', tJoin: 12, tRetire: 58 },
+  { id: 'gpt4',     name: 'GPT-4',    level: 0.60, color: '#4fffc0', tJoin: 33, tRetire: 84 },
   { id: 'claude',   name: 'Claude',   level: 0.88, color: '#ff8a5c', tJoin: 39 },
   { id: 'gemini',   name: 'Gemini',   level: 0.84, color: '#7c9bff', tJoin: 57 },
   { id: 'llama',    name: 'Llama',    level: 0.76, color: '#4aa8ff', tJoin: 60 },
@@ -97,7 +98,6 @@ export const WALLS = [
       S('qwen', 130, 'charge'),
       S('llama', 130, 'charge'),
       S('mistral', 130, 'charge'),
-      S('gpt4', 130, 'charge'),
       S('o1', 130, 'charge'),
     ],
   },
@@ -125,11 +125,11 @@ for (let t = T_FARSIDE + 1.5, k = 0; t < T_CRACK0 + 8; t += 2.6 + k * 0.1, k++) 
 
 // Generate the RSI assault: every bot wades in, hammering in staggered waves.
 {
-  const order = ['gpt1', 'gpt2', 'gpt3', 'gpt4', 'mistral', 'llama', 'qwen', 'grok', 'gemini', 'claude', 'deepseek', 'o1'];
+  const order = ['mistral', 'llama', 'qwen', 'grok', 'gemini', 'claude', 'deepseek', 'o1'];
   order.forEach((id, i) => {
     if (id === 'o1' || id === 'deepseek') return; // those two fire beams below
     for (let k = 0; k < 7; k++) {
-      const ti = 154.5 + i * 0.31 + k * 3.15;
+      const ti = 154.5 + i * 0.4 + k * 3.15;
       if (ti > T_SLUMP - 0.8) break;
       RSI.strikes.push(S(id, ti, k % 3 === 2 ? 'slam' : 'punch', { fail: true, hold: true }));
     }
@@ -144,3 +144,62 @@ export const YEARS = [
   [34, 2023.1], [45, 2023.9], [53, 2024.0], [63, 2024.4], [70, 2024.7], [78.5, 2024.95],
   [90, 2025.1], [103, 2025.55], [130, 2025.9], [150, 2026.2],
 ];
+
+// ---- pacing: story seconds -> real seconds ----------------------------------------
+// [from, to, speed] in story seconds; the walks between walls get faster each time.
+const PACE = [
+  [0, 9.5, 1.8], [9.5, 21, 2.1], [21, 30, 1.8],
+  [30, 44, 2.6], [44, 55.5, 1.8],
+  [55.5, 70, 3.2], [70, 81, 1.8],
+  [81, 95.5, 3.8], [95.5, 107, 1.8],
+  [107, 121.5, 4.2], [121.5, 132.5, 1.9],
+  [132.5, 150, 3.2], [150, 152, 1.8], [152, 176, 2.0], [176, 178.5, 1.8],
+  [178.5, END_T, 1.9], [END_T, 260, 1],
+];
+// slow-motion beats: every break, and every model powering down
+const SLOMO = [];
+for (const w of WALLS) if (w.tBreak) SLOMO.push([w.tBreak - 0.25, w.tBreak + 1.0, 0.45]);
+for (const b of BOTS) if (b.tRetire) SLOMO.push([b.tRetire - 0.4, b.tRetire + 1.4, 0.7]);
+
+const DT = 0.02;
+const speedTable = (() => {
+  const n = Math.round(260 / DT);
+  const raw = new Float64Array(n + 1);
+  for (let i = 0; i <= n; i++) {
+    const t = i * DT;
+    let v = 1;
+    for (const [a, b, sp] of PACE) if (t >= a && t < b) { v = sp; break; }
+    for (const [a, b, sp] of SLOMO) if (t >= a && t < b) v = sp;
+    raw[i] = v;
+  }
+  // blur so the speed changes ease in and out (±0.8 s)
+  const W = Math.round(0.8 / DT), out = new Float64Array(n + 1);
+  for (let i = 0; i <= n; i++) {
+    let sum = 0, c = 0;
+    for (let k = -W; k <= W; k++) { const j = Math.min(n, Math.max(0, i + k)); sum += raw[j]; c++; }
+    out[i] = sum / c;
+  }
+  return out;
+})();
+// cumulative real time at each table step
+const realTable = (() => {
+  const r = new Float64Array(speedTable.length);
+  for (let i = 1; i < r.length; i++) r[i] = r[i - 1] + DT / (0.5 * (speedTable[i] + speedTable[i - 1]));
+  return r;
+})();
+/** story seconds -> real seconds since the start button */
+export function toReal(t) {
+  const x = Math.min(Math.max(t, 0) / DT, realTable.length - 1.001);
+  const i = Math.floor(x);
+  return realTable[i] + (realTable[i + 1] - realTable[i]) * (x - i);
+}
+/** real seconds -> story seconds */
+export function toAuth(r) {
+  if (r <= 0) return r;
+  let lo = 0, hi = realTable.length - 1;
+  if (r >= realTable[hi]) return hi * DT + (r - realTable[hi]);
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (realTable[m] <= r) lo = m; else hi = m; }
+  return (lo + (r - realTable[lo]) / (realTable[hi] - realTable[lo])) * DT;
+}
+/** playback speed (story s per real s) at story time t */
+export const speedAt = (t) => speedTable[Math.min(speedTable.length - 1, Math.max(0, Math.round(t / DT)))];

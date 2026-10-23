@@ -2,7 +2,7 @@
 // the AudioContext clock, so music and picture stay locked to the same time.
 // Idea: every bot that joins adds an instrument; every wall break is a hit;
 // the finale strips everything away to a drone, a crack, and silence.
-import { SPEED, BOTS, WALLS, RSI, END_T, T_ASSAULT, T_SLUMP, T_FARSIDE, T_CRACK0, FAR_THUMPS } from './timeline.js';
+import { toReal, BOTS, WALLS, RSI, END_T, T_ASSAULT, T_SLUMP, T_FARSIDE, T_CRACK0, FAR_THUMPS } from './timeline.js';
 import { mulberry32 } from './sim.js';
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -23,7 +23,7 @@ function bpmAt(t) {
 
 export function buildScore(ctx, dest, t0 = 0) {
   const rnd = mulberry32(2025);
-  const T = (t) => t0 + t / SPEED;
+  const T = (t) => t0 + toReal(t);
 
   // --- buses ------------------------------------------------------------------
   const master = ctx.createGain(); master.gain.value = 0.8;
@@ -175,9 +175,11 @@ export function buildScore(ctx, dest, t0 = 0) {
   }
 
   // --- the bots: one instrument each --------------------------------------------
+  const T_SLUMP_ALL = T_SLUMP;
   const fade = (t) => (t >= T_SLUMP ? 0 : 1);
   function botMusic(bot) {
     const start = Math.ceil(Math.max(bot.tJoin + 3, 1.5));
+    const T_SLUMP = bot.tRetire ?? T_SLUMP_ALL; // a retired model's voice drops out
     const vol = (v) => v;
     switch (bot.id) {
       case 'gpt1': // crude bit-crushed plinks that sometimes fail to play
@@ -262,6 +264,14 @@ export function buildScore(ctx, dest, t0 = 0) {
     }
   }
   BOTS.forEach(botMusic);
+
+  // a model powers down: a falling whine, a dull thud, then a gap where its voice was
+  for (const b of BOTS) if (b.tRetire) {
+    const tr = b.tRetire;
+    boom(tr - 0.5, { vol: 0.2, f0: 700, f1: 60, dur: 1.5 });
+    noise(tr - 0.5, 0.5, { type: 'bandpass', f0: 3000, f1: 300, q: 2, vol: 0.05, send: 0.3 });
+    kick(tr + 0.9, 0.35);
+  }
 
   // ducking helper: dip the music bus right before a big hit
   function dip(tHit, dur = 0.35) {
@@ -414,7 +424,7 @@ export function createAudio() {
 }
 
 // Render the score offline to a 16-bit WAV (used by tools/capture.mjs).
-export async function renderWav(seconds = (END_T + 5) / SPEED, sr = 44100) {
+export async function renderWav(seconds = toReal(END_T) + 5, sr = 44100) {
   const ctx = new OfflineAudioContext(2, Math.floor(seconds * sr), sr);
   buildScore(ctx, ctx.destination, 0);
   const buf = await ctx.startRendering();

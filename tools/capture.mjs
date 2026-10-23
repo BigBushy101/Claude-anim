@@ -2,7 +2,7 @@
 // Chromium (deterministic, since every frame is a pure function of t), renders the
 // score offline to a WAV, then muxes with ffmpeg.
 //
-//   npm run build && node tools/capture.mjs [--fps 30] [--width 1920] [--from 0] [--to 205]   (from/to in authored seconds; the film runs SPEED x faster)
+//   npm run build && node tools/capture.mjs [--fps 30] [--width 1920] [--from 0] [--to 205]   (from/to in story seconds; the film's speed varies)
 //                                           [--audio 1] [--workers 4] [--out out/the-walls.mp4]
 //
 // --workers N renders frames in N parallel browsers (useful on CPU-only machines).
@@ -14,7 +14,7 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
-import { SPEED } from '../src/timeline.js';
+import { toReal, toAuth } from '../src/timeline.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > -1 ? process.argv[i + 1] : d; };
 const FPS = +arg('fps', 30), WIDTH = +arg('width', 1920), FROM = +arg('from', 0), TO = +arg('to', 205);
@@ -40,7 +40,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const url = `http://127.0.0.1:${server.address().port}`;
 
-const frames = Math.round(((TO - FROM) / SPEED) * FPS);
+const R0 = toReal(FROM), frames = Math.round((toReal(TO) - R0) * FPS);
 
 async function open(t) {
   const browser = await chromium.launch({
@@ -56,7 +56,7 @@ async function open(t) {
 async function renderFrames(dir, k, n) {
   const { browser, page } = await open(FROM);
   for (let i = k; i < frames; i += n) {
-    await page.evaluate((t) => window.__film.seek(t), FROM + (i / FPS) * SPEED);
+    await page.evaluate((t) => window.__film.seek(t), toAuth(R0 + i / FPS));
     await page.screenshot({ path: path.join(dir, `f${String(i).padStart(6, '0')}.png`) });
     if (n > 1 || i % FPS === 0) process.stdout.write(`\r  worker ${k}: frame ${i}/${frames}   `);
   }
@@ -105,7 +105,7 @@ server.close();
 console.log('\nEncoding…');
 await new Promise((res, rej) => {
   const inputs = ['-y', '-framerate', String(FPS), '-i', path.join(tmp, 'f%06d.png')];
-  if (AUDIO) inputs.push('-ss', String(FROM / SPEED), '-i', wav, '-t', String((TO - FROM) / SPEED));
+  if (AUDIO) inputs.push('-ss', String(R0), '-i', wav, '-t', String(toReal(TO) - R0));
   const ff = spawn('ffmpeg', [...inputs, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow',
     ...(AUDIO ? ['-c:a', 'aac', '-b:a', '256k', '-shortest'] : []), OUT], { stdio: 'inherit' });
   ff.on('exit', (c) => (c === 0 ? res() : rej(new Error('ffmpeg exited ' + c))));

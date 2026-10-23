@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { lerp, clamp, smoothstep, mulberry32, hashStr } from './sim.js';
+import { speedAt } from './timeline.js';
 
 const TAU = Math.PI * 2;
 
@@ -58,7 +59,7 @@ export function buildRobot(bot) {
     armLen: lerp(0.62, 0.92, L),
   };
   const swing = lerp(0.3, 0.52, L);
-  const stride = TAU * swing * D.legLen;
+  const stride = TAU * swing * D.legLen * (1 + 0.3 * L);
 
   const root = new THREE.Group();
   const hips = new THREE.Group();
@@ -288,37 +289,40 @@ export function poseRobot(r, st, t) {
   const phase = (st.x / r.stride) * TAU;
   const q = Math.PI / 3;
   const ph = lerp(Math.round(phase / q) * q, phase, smooth);
-  const move = clamp(Math.abs(st.v) / 0.55, 0, 1) * (1 - 0.0);
-  const dir = st.v < -0.01 ? -1 : 1;
+  const off = st.off || 0, dying = st.dying || 0;
+  const alive = 1 - off;
+  const move = clamp(Math.abs(st.v) / 0.55, 0, 1);
+  // how hard it is running on screen (story speed x playback speed); the older models can't really run
+  const run = smoothstep(2.6, 6.5, Math.abs(st.v) * speedAt(t)) * lerp(0.45, 1, smoothstep(0.2, 0.7, L));
 
   // gait
-  const A = r.swing * move;
+  const A = r.swing * move * (1 + 0.5 * run);
   const sinP = Math.sin(ph);
   r.legs.forEach((leg, i) => {
     const psi = i === 0 ? 0 : Math.PI;
     const thigh = A * Math.sin(ph + psi);
     leg.hip.rotation.z = thigh;
-    const kneeA = leg.hasKnee ? -r.kneeBend * Math.max(0, Math.cos(ph + psi)) * move : 0;
+    const kneeA = leg.hasKnee ? -r.kneeBend * (1 + 0.9 * run) * Math.max(0, Math.cos(ph + psi)) * move : 0;
     leg.knee.rotation.z = kneeA;
     leg.foot.rotation.z = -(thigh + kneeA) * 0.7;
   });
-  r.hips.position.y = (D.legLen + D.footH) * Math.cos(A * Math.abs(sinP)) + 0.005;
+  r.hips.position.y = (D.legLen + D.footH) * Math.cos(A * Math.abs(sinP)) + 0.005 - 0.06 * run - 0.16 * off;
   const bob = (1 - smooth) * 0.03 * move * Math.sin(ph * 2);
   r.hips.position.y += bob;
 
   // idle life
-  const breathe = Math.sin(t * 1.7 + r.bot.seed * 9) * 0.012 * (0.4 + L);
+  const breathe = Math.sin(t * 1.7 + r.bot.seed * 9) * 0.012 * (0.4 + L) * alive;
   const twitch = (1 - smooth) * (Math.sin(Math.floor(t * 7 + r.bot.seed * 40) * 12.9898) > 0.8 ? 0.12 : 0);
 
   // base arms: stiff & held forward when primitive, swinging when refined
-  const armSwing = lerp(0.06, 0.5, smooth) * move;
+  const armSwing = lerp(0.06, 0.5, smooth) * move * (1 + 1.1 * run);
   const armHold = lerp(0.55, 0.12, smooth);
   const baseArm = [-armSwing * Math.sin(ph) + armHold * (1 - 0.5 * move), armSwing * Math.sin(ph) + armHold * (1 - 0.5 * move)];
 
-  let lean = lerp(-0.05, -0.1, move) * (0.5 + 0.5 * L);
+  let lean = lerp(-0.05, -0.1, move) * (0.5 + 0.5 * L) - 0.3 * run;
   let twist = 0.14 * smooth * move * Math.sin(ph);
   let armR = baseArm[1], armL = baseArm[0];
-  let elbowR = L >= 0.3 ? 0.25 + 0.2 * move : 0, elbowL = elbowR;
+  let elbowR = L >= 0.3 ? 0.25 + 0.2 * move + 0.85 * run : 0, elbowL = elbowR;
   let headPitch = 0, headYaw = 0, glow = 0;
   const sway = (1 - smooth) * 0.1 * move * Math.sin(ph);
 
@@ -345,9 +349,16 @@ export function poseRobot(r, st, t) {
     headPitch = lerp(headPitch, 0.35, s);
   }
 
-  // spent: slump
-  if (st.slump > 0) {
-    const s = st.slump;
+  // power-down: a few stuttering twitches while braking, then the head drops
+  if (dying > 0 && off < 1) {
+    const tw = Math.sin(t * 31 + r.bot.seed * 11) > 0.55 ? 1 : 0;
+    headYaw += tw * 0.35 * dying * (1 - off);
+    armR += tw * 0.25 * dying;
+  }
+  // spent: slump (also what a powered-down model hangs like)
+  const spent = Math.max(st.slump, off);
+  if (spent > 0) {
+    const s = spent;
     lean = lerp(lean, -0.36, s);
     headPitch = lerp(headPitch, -0.7, s);
     armR = lerp(armR, 0.05, s);
@@ -372,7 +383,9 @@ export function poseRobot(r, st, t) {
   r.headPivot.rotation.y = headYaw + twitch * 0.8;
 
   const idleGlow = 0.8 + 0.25 * Math.sin(t * 2.3 + r.bot.seed * 20);
-  r.glowMat.emissiveIntensity = (1.6 * idleGlow + glow * 2.2) * (1 - 0.4 * st.slump);
+  // eyes stutter out while dying, then stay dark
+  const flick = dying > 0 ? 1 - dying * (0.55 + 0.45 * Math.sin(t * 43 + r.bot.seed * 7)) : 1;
+  r.glowMat.emissiveIntensity = (1.6 * idleGlow + glow * 2.2) * (1 - 0.4 * st.slump) * flick * (1 - smoothstep(0.1, 0.55, off));
 
   r.root.position.set(st.x, 0, st.z);
   const sc = Math.max(0.0001, st.scale);

@@ -49,16 +49,16 @@ export const CARDS = [
 
   // --- Wall 4: can't reason ---------------------------------------------------
   { kind: 'paper', kicker: 'Paper · 2025 · DeepSeek', title: 'DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning', source: 'DeepSeek-AI · arXiv:2501.12948',
-    t0: 84, t1: 92, dx: 9, y: 5.6, z: -6, w: 11 },
+    t0: 83, t1: 93, dx: 9, y: 5.6, z: -6, w: 11 },
   { kind: 'paper', kicker: 'Paper · Apple · 2025', title: 'The Illusion of Thinking: Understanding the Strengths and Limitations of Reasoning Models via the Lens of Problem Complexity', source: 'Shojaee et al. · Apple',
     t0: 92, t1: 101, dx: -4, y: 7.6, z: -4.5, w: 12 },
   { kind: 'news', kicker: 'Announcement · Google DeepMind · Jul 2025', title: 'Advanced version of Gemini with Deep Think officially achieves gold-medal standard at the International Mathematical Olympiad', source: 'Google DeepMind · IMO 2025',
-    t0: 103.5, t1: 112, dx: 6, y: 7.7, z: -6, w: 12,
+    t0: 103.5, t1: 115, dx: 6, y: 7.7, z: -6, w: 12,
     note: 'OpenAI announced a gold-level IMO result in the same week — confirm which headline to show' },
 
   // --- Wall 5: benchmarks -----------------------------------------------------
   { kind: 'paper', kicker: 'Benchmark · 2025', title: 'Humanity’s Last Exam', source: 'Center for AI Safety & Scale AI · arXiv:2501.14249',
-    t0: 110, t1: 119, dx: 10, y: 4.8, z: -5, w: 9 },
+    t0: 108.5, t1: 120, dx: 10, y: 4.8, z: -5, w: 9 },
   { kind: 'news', kicker: 'Report · ARC Prize · Dec 2024', title: 'OpenAI o3 Breakthrough High Score on ARC-AGI-Pub', source: 'ARC Prize',
     t0: 115, t1: 124, dx: 4, y: 7.7, z: -5, w: 10.5 },
 
@@ -66,7 +66,7 @@ export const CARDS = [
   { kind: 'quote', kicker: 'I. J. Good · 1965', title: '“…the first ultraintelligent machine is the last invention that man need ever make, provided that the machine is docile enough to tell us how to keep it under control.”', source: 'Speculations Concerning the First Ultraintelligent Machine',
     t0: 134, t1: 147, dx: 10, y: 8.6, z: -6, w: 13 },
   { kind: 'report', kicker: 'Report · 2025', title: 'AI 2027', source: 'Kokotajlo, Alexander, Larsen, Lifland, Dean',
-    t0: 141, t1: 150, dx: 8, y: 5.0, z: -6, w: 7 },
+    t0: 140, t1: 151, dx: 8, y: 5.0, z: -6, w: 7 },
   { kind: 'paper', kicker: 'Paper · 2025', title: 'Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents', source: 'Zhang et al. · Sakana AI · UBC',
     t0: 152, t1: 161, dx: -9, y: 12, z: -9, w: 12 },
   { kind: 'paper', kicker: 'Paper · 2025', title: 'AlphaEvolve: A coding agent for scientific and algorithmic discovery', source: 'Google DeepMind',

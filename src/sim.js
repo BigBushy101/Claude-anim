@@ -73,14 +73,30 @@ export { botById };
 const joinEase = (u) => 0.7 * u + 0.3 * (u * u * (3 - 2 * u));
 export const presence = (b, t) => clamp((t - b.tJoin) / JOIN_TIME, 0, 1);
 
+// A retired model decelerates over STOP_T and then stands dead where it halted.
+const STOP_T = 2.2;
+const RETIRE_FADE = 2.5;
+export const retiredAt = (b) => b.tRetire ?? Infinity;
+export const alive = (b, t) => (b.tRetire == null ? 1 : 1 - smoothstep(b.tRetire, b.tRetire + RETIRE_FADE, t));
+// the bot's own clock: runs at 1 until it starts to brake, then eases to a halt
+function ownTime(b, t) {
+  const tr = retiredAt(b);
+  if (t <= tr - STOP_T) return t;
+  const u = Math.min(1, (t - (tr - STOP_T)) / STOP_T);
+  return tr - STOP_T + STOP_T * (u - u * u / 2);
+}
+// speed a model can keep up with (story units / s); the group outruns the older ones
+const pace = (b) => 0.7 + 2.3 * b.level;
+const speedOf = (t) => (markerX(t + 0.1) - markerX(t - 0.1)) / 0.2;
+
 function baseState(b, t, joined = false) {
   const p = joined ? 1 : presence(b, t);
   let ahead = 0;
-  for (const o of BOTS) if (o.level > b.level) ahead += smoothstep(0, 1, presence(o, t));
+  for (const o of BOTS) if (o.level > b.level) ahead += smoothstep(0, 1, presence(o, t)) * alive(o, t);
   const q = joinEase(p);
   const side = b.lane >= 0.1 ? 1 : -1;
   return {
-    x: markerX(t) - SPACING * ahead - JOIN_DIST * (1 - q),
+    x: markerX(t) - SPACING * ahead - JOIN_DIST * (1 - q) - 3.2 * Math.max(0, speedOf(t) - pace(b)) * p,
     z: b.lane + side * 3.6 * (1 - smoothstep(0.25, 1, p)),
     p, ahead,
   };
@@ -109,6 +125,19 @@ function lungeFor(b, s) {
 
 // Everything the renderer needs for one bot at time t.
 export function botState(b, t) {
+  const tau = ownTime(b, t);
+  const st = coreState(b, tau);
+  if (tau === t) return st;
+  // after the brake starts, velocity follows the bot's own clock rate
+  const e = 0.06;
+  st.v = (coreState_x(b, ownTime(b, t + e)) - coreState_x(b, ownTime(b, t - e))) / (2 * e);
+  st.off = smoothstep(b.tRetire, b.tRetire + RETIRE_FADE, t);
+  st.dying = smoothstep(b.tRetire - STOP_T, b.tRetire, t);
+  return st;
+}
+const coreState_x = (b, tau) => baseOf(b, tau);
+
+function coreState(b, t) {
   const base = baseState(b, t);
   let x = base.x, z = base.z;
   let lunge = 0, knock = 0, stagger = 0, lungeEnv = 0;
@@ -158,6 +187,7 @@ export function botState(b, t) {
     scale: smoothstep(0, 0.04, base.p),
     stagger, strike, beam,
     slump: smoothstep(T_SLUMP, T_SLUMP + 2.5, t),
+    off: 0, dying: 0,
   };
 }
 
