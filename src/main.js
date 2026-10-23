@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BOTS, WALLS, RSI, END_T, DURATION, T_ASSAULT, T_CRACK0, T_CRACK1, T_FARSIDE, FAR_THUMPS } from './timeline.js';
+import { SPEED, BOTS, WALLS, RSI, END_T, DURATION, T_ASSAULT, T_CRACK0, T_CRACK1, T_FARSIDE, FAR_THUMPS } from './timeline.js';
 import { markerX, botState, yearAt, wallFaceX, smoothstep, clamp, lerp, botById } from './sim.js';
 import { placedCards } from './cards.js';
 import { buildRobot, poseRobot } from './robot.js';
@@ -228,9 +228,10 @@ applyTier();
 const audio = createAudio();
 let playing = false, paused = false, wallStart = 0, pausedAt = 0, ended = false;
 let useAudio = false;
+// real seconds -> authored seconds (the film is sped up by SPEED)
 const nowT = () => {
-  if (useAudio) { const a = audio.time(); if (a != null) return a; }
-  return (performance.now() - wallStart) / 1000;
+  if (useAudio) { const a = audio.time(); if (a != null) return a * SPEED; }
+  return ((performance.now() - wallStart) / 1000) * SPEED;
 };
 
 // step quality down if the device can't hold ~30 fps
@@ -269,7 +270,7 @@ function begin(withSound) {
   }, 1800);
 }
 const soundBtn = document.getElementById('sound');
-soundBtn.onclick = () => { audio.ctx?.resume(); soundBtn.classList.remove('on'); };
+soundBtn.onclick = () => { audio.ctx?.resume(); audio.blip(); soundBtn.classList.remove('on'); };
 document.getElementById('begin').onclick = () => begin(true);
 document.getElementById('beginMuted').onclick = () => begin(false);
 document.getElementById('replay').onclick = () => { audio.stop(); begin(true); };
@@ -288,7 +289,7 @@ window.__film = {
   cam() { return { p: camera.position.toArray().map((v) => +v.toFixed(2)), fov: camera.fov, marker: markerX(window.__t ?? 0) }; },
   wav: renderWav,
   buildMs() { const c = new OfflineAudioContext(2, 44100, 44100); const t0 = performance.now(); buildScore(c, c.destination, 0); return performance.now() - t0; },
-  END_T, DURATION,
+  END_T, DURATION, SPEED,
 };
 
 if (SEEK !== null) {

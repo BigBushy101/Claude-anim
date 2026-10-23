@@ -1,6 +1,6 @@
 # THE WALLS
 
-A ~3½ minute 3D animation of the history of modern AI, told as humanoid robots walking
+A ~2 minute 3D animation of the history of modern AI, told as humanoid robots walking
 into the walls people said AI would never get past. Runs in the browser (Three.js),
 with a fully synthesised score. No asset files: every model, texture and sound is
 generated in code.
@@ -20,15 +20,18 @@ Controls: **Space** pauses. Add `?q=low` for a lighter render (1× pixel ratio, 
 
 | Time | Beat |
 |---|---|
-| 0:00 | GPT-1 shuffles in alone — a pile of boxes with an antenna. Stop-motion gait. |
-| 0:06–0:30 | GPT-2 and GPT-3 join. **Wall 1 "JUST PARROTS"** (brick). GPT-1 and GPT-2 bounce off; GPT-3 breaks through. |
-| 0:44–0:57 | GPT-4 and Claude join. **Wall 2 "DIMINISHING RETURNS"** (concrete, a flattening scaling curve). |
-| 1:10–1:19 | Gemini, Llama, Grok, o1 join. **Wall 3 "OUT OF DATA"** (server racks). |
-| 1:35–1:43 | DeepSeek, Qwen, Mistral join. **Wall 4 "CAN'T REASON"** (carved stone); a reasoning bot cuts an arch with a beam. |
-| 2:01–2:10 | Everyone together. **Wall 5 "TOO HARD FOR AI"** (armour plate). |
-| 2:10–2:32 | The last wall: a monolith ten times taller, with glowing seams and *RSI* on its face. Every bot strikes it. It only flares. |
-| 2:56 | They slump. Cut to the **far side** of the wall: dark, silent, muffled thuds. |
-| 3:08 | A hairline crack of light. It grows. **Cut to black** on the final swell; one sub-bass hit over the dark. |
+| 0:00 | GPT-1 shuffles in alone, a pile of boxes with an antenna. Stop-motion gait. |
+| 0:04–0:19 | GPT-2 and GPT-3 join. **Wall 1 "JUST PARROTS"** (brick). GPT-1 and GPT-2 bounce off; GPT-3 breaks through. |
+| 0:27–0:36 | GPT-4 and Claude join. **Wall 2 "DIMINISHING RETURNS"** (concrete, a flattening scaling curve). |
+| 0:44–0:50 | Gemini, Llama, Grok, o1 join. **Wall 3 "OUT OF DATA"** (server racks). |
+| 1:00–1:05 | DeepSeek, Qwen, Mistral join. **Wall 4 "CAN'T REASON"** (carved stone); a reasoning bot cuts an arch with a beam. |
+| 1:16–1:22 | Everyone together. **Wall 5 "TOO HARD FOR AI"** (armour plate). |
+| 1:22–1:50 | The last wall: a monolith far taller than the rest, with glowing seams and *RSI* on its face. Every bot strikes it. It only flares. |
+| 1:50 | They slump. Cut to the **far side** of the wall: dark, silent, muffled thuds. |
+| 1:58 | A hairline crack of light. It grows. **Cut to black** at 2:06 on the final swell; one sub-bass hit over the dark. |
+
+The whole film plays at `SPEED = 1.6` (`src/timeline.js`): all the times authored in that file are
+in "authored seconds" and run 1.6× faster. Set `SPEED = 1` for the original 3:22 pacing.
 
 Robots get more humanoid as models improve: boxes → rounded blocks → capsule limbs, one
 cyclops eye → two eyes → a visor, rigid limbs → knees and elbows, stop-motion stagger →
@@ -55,13 +58,13 @@ Model names appear only as plain-text name tags. No logos.
 ```bash
 npm run build
 npm i -D playwright            # or: PLAYWRIGHT_MODULE=/path/to/node_modules
-npm run capture -- --fps 30 --width 1920 --out out/the-walls.mp4
+npm run capture -- --fps 30 --width 1920 --workers 4 --out out/the-walls.mp4
 ```
 
 Every frame is a pure function of time (`src/sim.js`, `src/camera.js`, `src/wall.js`), so
 the capture steps the clock frame-by-frame and is exactly reproducible. The score is
 rendered offline to WAV and muxed with ffmpeg. Software-GL machines are slow (≈1 s per
-frame); use a GPU box for the full film. Try `--from 27 --to 31 --audio 0` for a quick test.
+frame); use a GPU box for the full film. `--workers N` renders frames in N parallel browsers. Try `--from 27 --to 31 --audio 0` for a quick test (times are authored seconds).
 
 ## Where to tweak
 

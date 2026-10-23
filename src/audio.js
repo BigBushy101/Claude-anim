@@ -2,7 +2,7 @@
 // the AudioContext clock, so music and picture stay locked to the same time.
 // Idea: every bot that joins adds an instrument; every wall break is a hit;
 // the finale strips everything away to a drone, a crack, and silence.
-import { BOTS, WALLS, RSI, END_T, T_ASSAULT, T_SLUMP, T_FARSIDE, T_CRACK0, FAR_THUMPS } from './timeline.js';
+import { SPEED, BOTS, WALLS, RSI, END_T, T_ASSAULT, T_SLUMP, T_FARSIDE, T_CRACK0, FAR_THUMPS } from './timeline.js';
 import { mulberry32 } from './sim.js';
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -23,10 +23,10 @@ function bpmAt(t) {
 
 export function buildScore(ctx, dest, t0 = 0) {
   const rnd = mulberry32(2025);
-  const T = (t) => t0 + t;
+  const T = (t) => t0 + t / SPEED;
 
   // --- buses ------------------------------------------------------------------
-  const master = ctx.createGain(); master.gain.value = 0.5;
+  const master = ctx.createGain(); master.gain.value = 0.8;
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -18; comp.ratio.value = 3.5; comp.attack.value = 0.01; comp.release.value = 0.25;
   const limiter = ctx.createDynamicsCompressor(); // catch the peaks the glue compressor lets through
@@ -105,8 +105,17 @@ export function buildScore(ctx, dest, t0 = 0) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, T(t)); g.gain.linearRampToValueAtTime(vol, T(t + 0.01)); g.gain.exponentialRampToValueAtTime(0.0003, T(t + dur));
     o.connect(g); g.connect(master); wet(g, 0.5);
+    // upper partials + body noise so the hit still reads on phone speakers
+    for (const [mul, v, d, ty] of [[2.6, 0.45, 0.7, 'triangle'], [5, 0.22, 0.4, 'triangle']]) {
+      const p = osc(ty, f0 * mul, t, t + dur + 0.1);
+      p.frequency.setValueAtTime(f0 * mul, T(t)); p.frequency.exponentialRampToValueAtTime(f1 * mul, T(t + dur * d));
+      const pg = ctx.createGain();
+      pg.gain.setValueAtTime(0.0001, T(t)); pg.gain.linearRampToValueAtTime(vol * v, T(t + 0.01)); pg.gain.exponentialRampToValueAtTime(0.0003, T(t + dur * d));
+      p.connect(pg); pg.connect(master);
+    }
+    noise(t, Math.min(0.5, dur * 0.4), { type: 'bandpass', f0: 420, f1: 160, q: 0.8, vol: vol * 0.35, send: 0.3 });
   }
-  function kick(t, vol = 0.5) { boom(t, { vol, f0: 120, f1: 40, dur: 0.45 }); noise(t, 0.04, { type: 'highpass', f0: 2000, vol: vol * 0.25, send: 0.05 }); }
+  function kick(t, vol = 0.5) { boom(t, { vol, f0: 120, f1: 40, dur: 0.45 }); noise(t, 0.05, { type: 'highpass', f0: 1800, vol: vol * 0.5, send: 0.05 }); }
   function tom(t, f = 90, vol = 0.4) { boom(t, { vol, f0: f * 1.6, f1: f, dur: 0.55 }); noise(t, 0.08, { type: 'bandpass', f0: 600, vol: vol * 0.2, send: 0.2 }); }
   function clang(t, vol = 0.18) {
     for (const [f, m] of [[310, 1], [517, 0.7], [803, 0.5], [1250, 0.35]]) {
@@ -129,6 +138,14 @@ export function buildScore(ctx, dest, t0 = 0) {
     for (const [f, ty, v] of [[36.7, 'sawtooth', 0.7], [36.9, 'sawtooth', 0.7], [73.4, 'sine', 0.8], [55, 'sawtooth', 0.35]]) {
       const o = osc(ty, f, 0, END_T + 0.1);
       const og = ctx.createGain(); og.gain.value = v; o.connect(og); og.connect(lp);
+    }
+    // an octave-and-a-half up, in the range small speakers can actually play
+    {
+      const mg = ctx.createGain(); mg.gain.setValueAtTime(0.0001, T(0)); mg.gain.linearRampToValueAtTime(0.07, T(10));
+      mg.gain.linearRampToValueAtTime(0.12, T(T_SLUMP)); mg.gain.linearRampToValueAtTime(0.05, T(T_FARSIDE)); mg.gain.linearRampToValueAtTime(0.16, T(END_T - 0.1)); mg.gain.setValueAtTime(0.0001, T(END_T));
+      const ml = ctx.createBiquadFilter(); ml.type = 'lowpass'; ml.frequency.value = 700; ml.Q.value = 1;
+      ml.connect(mg); mg.connect(music); wet(mg, 0.4);
+      for (const [f, ty] of [[146.8, 'sawtooth'], [147.3, 'sawtooth'], [220, 'sawtooth'], [293.7, 'triangle']]) { const o = osc(ty, f, 0, END_T + 0.1); o.connect(ml); }
     }
     // slow pulse on the drone
     const lfo = ctx.createOscillator(); lfo.frequency.value = 0.11;
@@ -361,7 +378,7 @@ function silentWavUri() {
 }
 
 export function createAudio() {
-  let ctx = null, start = 0;
+  let ctx = null, start = 0, el = null;
   return {
     get ready() { return !!ctx; },
     get ctx() { return ctx; },
@@ -369,21 +386,35 @@ export function createAudio() {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return false;
       try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
-      try { const a = new Audio(silentWavUri()); a.loop = true; a.play().catch(() => {}); } catch (e) { /* optional */ }
       ctx = new AC();
       if (ctx.state === 'suspended') ctx.resume();
+      let dest = ctx.destination;
+      // iOS ties Web Audio to the ringer switch; output routed through a media element is not
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (ios && ctx.createMediaStreamDestination) {
+        try {
+          const msd = ctx.createMediaStreamDestination();
+          el = new Audio(); el.srcObject = msd.stream; el.playsInline = true;
+          el.play().catch(() => {});
+          dest = msd;
+        } catch (e) { dest = ctx.destination; }
+      } else {
+        try { el = new Audio(silentWavUri()); el.loop = true; el.play().catch(() => {}); } catch (e) { /* optional */ }
+      }
       start = ctx.currentTime + 1.6; // headroom: scheduling the whole score takes a moment (longer on phones)
-      buildScore(ctx, ctx.destination, start);
+      buildScore(ctx, dest, start);
       return true;
     },
     // film time according to the audio clock
     time() { return ctx ? ctx.currentTime - start : null; },
-    stop() { if (ctx) ctx.close(); ctx = null; },
+    // short confirmation blip, used when the user taps "sound"
+    blip() { if (!ctx) return; const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 660; g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25); o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.3); },
+    stop() { if (ctx) ctx.close(); if (el) { el.pause(); el = null; } ctx = null; },
   };
 }
 
 // Render the score offline to a 16-bit WAV (used by tools/capture.mjs).
-export async function renderWav(seconds = END_T + 5, sr = 44100) {
+export async function renderWav(seconds = (END_T + 5) / SPEED, sr = 44100) {
   const ctx = new OfflineAudioContext(2, Math.floor(seconds * sr), sr);
   buildScore(ctx, ctx.destination, 0);
   const buf = await ctx.startRendering();

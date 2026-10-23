@@ -1,6 +1,9 @@
 // All story data lives here: who joins when, where the walls stand, and when
 // each one breaks. Everything else in the film is a pure function of this + time.
 
+// Playback speed-up: every time below is in "authored" seconds; the film plays
+// SPEED times faster, so the authored 202 s runs in about 126 s.
+export const SPEED = 1.6;
 export const END_T = 202;      // hard cut to black
 export const DURATION = 207;   // includes the silent black tail
 
